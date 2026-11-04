@@ -1,0 +1,63 @@
+name: check
+
+# The crate's own gate: the contract must be intact, the reference game must pass
+# the harness, and every fixture must still produce the verdict it documents.
+# If this is green, a Rules Agent's output failing the same checks means the
+# generated game is wrong — not that the harness is broken.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal --component clippy
+
+      - name: Contract is unmodified
+        run: |
+          python3 - <<'PY'
+          import hashlib, pathlib, sys
+          want = pathlib.Path("scripts/contract.sha256").read_text().split()[0]
+          got = hashlib.sha256(pathlib.Path("src/combinatorial_game.rs").read_bytes()).hexdigest()
+          print("contract", got)
+          if got != want:
+              sys.exit("src/combinatorial_game.rs has drifted from the pinned contract")
+          PY
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Unit tests (reference game)
+        run: cargo test --locked
+
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+        continue-on-error: true
+
+      - name: Reference game passes the harness
+        run: |
+          cargo run --quiet -- check --json --out report.json
+          python3 - <<'PY'
+          import json, sys
+          d = json.load(open("report.json"))
+          print("errors:", d["counts"]["errors"], "warnings:", d["counts"]["warnings"])
+          if not d["ok"]:
+              print(json.dumps(d["findings"], indent=2))
+              sys.exit("the reference game must always pass")
+          PY
+
+      - name: Every fixture behaves as documented
+        run: python3 scripts/verify_fixtures.py
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: harness-report
+          path: report.json

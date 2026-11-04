@@ -1,0 +1,18 @@
+[package]
+name = "bgent"
+version = "0.1.0"
+edition = "2021"
+description = "Integrate and run code from game code artefacts"
+publish = false
+
+# Zero dependencies on purpose: the crate must build offline in CI with no
+# supply chain, and a Rules Agent that `cargo add`s something must be a
+# deliberate, visible act.
+
+[lib]
+name = "bgent"
+path = "src/lib.rs"
+
+[[bin]]
+name = "bgent"
+path = "src/main.rs"
