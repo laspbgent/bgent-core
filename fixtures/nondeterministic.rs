@@ -1,6 +1,6 @@
 //! FIXTURE — try_move gives different successors for the same state and move
 //!
-//! Expected harness verdict: FAIL — error `nondeterministic_try_move`, plus warning `no_terminal_reachable`
+//! Expected harness verdict: FAIL — error `nondeterministic_try_move`
 //!
 //! Installed with: python scripts/integrate.py --run-id fx-nondeterministic --from-file fixtures/nondeterministic.rs
 
