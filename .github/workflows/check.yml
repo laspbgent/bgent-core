@@ -1,5 +1,14 @@
 name: check
 
+# The crate's own gate. Two jobs, because they prove different things:
+#
+#   no-game  — a checkout without the games submodule must FAIL to build. If this
+#              passes, the game is not really part of the crate and the whole
+#              structure has quietly stopped meaning anything.
+#   check    — with the submodule mounted and the baseline game installed, the
+#              contract is intact, the reference passes the harness, and all eight
+#              fixtures still fail for the documented reasons.
+
 on:
   push:
     branches: [main]
@@ -10,13 +19,42 @@ permissions:
   contents: write
 
 jobs:
-  check:
+  no-game:
+    name: A crate with no games module must not build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out without submodules
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Build must fail
+        run: |
+          if cargo build --locked 2>build-error.log; then
+            echo "::error::the crate built without a games module — game code is not part of the crate"
+            exit 1
+          fi
+          echo "build failed as intended:"
+          grep -m1 "file not found for module" build-error.log || cat build-error.log
+
+  check:
+    name: Full check with the games module
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out with submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Install Rust
         run: rustup toolchain install stable --profile minimal --component clippy
+
+      - name: The games module is really mounted
+        run: |
+          test -f src/games/mod.rs || { echo "::error::src/games/mod.rs missing — submodule not mounted"; exit 1; }
+          test -f src/games/current.rs || { echo "::error::src/games/current.rs missing"; exit 1; }
+          echo "games module at $(git -C src/games rev-parse --short HEAD)"
 
       - name: Contract is unmodified
         run: |
@@ -37,7 +75,6 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --all-targets -- -D warnings
-        continue-on-error: true
 
       - name: Reference game passes the harness
         run: |
@@ -52,7 +89,6 @@ jobs:
           PY
 
       - name: Every fixture behaves as documented
-        id: fixtures
         run: |
           set -o pipefail
           python3 scripts/verify_fixtures.py 2>&1 | tee fixture-verify.log
@@ -65,10 +101,10 @@ jobs:
           path: |
             report.json
             fixture-verify.log
+            build-error.log
 
-      # GitHub's job-log endpoint answers with a redirect that our client cannot
-      # follow, so on failure the verifier's output is committed to a branch
-      # instead. That is the only way the failure text reaches the author.
+      # The job-log endpoint redirects and our client cannot follow it, so on failure
+      # the output is committed to a branch instead of being unreachable.
       - name: Publish the failure log
         if: failure()
         run: |
@@ -76,8 +112,9 @@ jobs:
           git config user.name  "bgent-ci"
           git config user.email "bgent-ci@users.noreply.github.com"
           mkdir -p ci-logs
-          cp fixture-verify.log "ci-logs/fixtures-${GITHUB_SHA:0:10}.log"
+          cp fixture-verify.log "ci-logs/fixtures-${GITHUB_SHA:0:10}.log" 2>/dev/null || true
+          cp build-error.log    "ci-logs/build-${GITHUB_SHA:0:10}.log"    2>/dev/null || true
           git checkout -B ci-logs
           git add -f ci-logs
-          git commit -m "ci: fixture verification output for ${GITHUB_SHA:0:10}"
+          git commit -m "ci: verification output for ${GITHUB_SHA:0:10}" || true
           git push -f origin ci-logs

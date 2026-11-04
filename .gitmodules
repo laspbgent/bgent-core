@@ -1,0 +1,4 @@
+[submodule "src/games"]
+	path = src/games
+	url = https://github.com/laspbgent/code-artefacts.git
+	branch = main

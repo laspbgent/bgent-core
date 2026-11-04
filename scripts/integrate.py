@@ -14,8 +14,9 @@ What it does, in order:
   2. Fetches the run's game source (from a file, or from the code-artefacts
      submodule at a given ref) and statically checks it against the module
      contract before spending compiler time on it.
-  3. Copies it to src/games/current.rs and narrows src/games/mod.rs to that one
-     module, so no historical run can break the build.
+  3. Installs it as `current.rs` in the games module — which is the `code-artefacts`
+     submodule mounted at src/games/ — and writes that module's `mod.rs` so only
+     `current` is compiled. Historical runs stay in runs/ and are never declared.
   4. Builds. Non-zero exit stops here and prints the compiler output — this is
      what the canned-failure test mode exercises.
   5. Runs the player-free harness (`bgent check`) and writes report.json.
@@ -26,6 +27,10 @@ Usage
         --from-file ../code-artefacts/runs/20261104T1700Z-tictactoe/game.rs
 
     python scripts/integrate.py --run-id <run-id> --artefact-ref run/<run-id>
+
+    # when the games module is checked out somewhere other than src/games/
+    python scripts/integrate.py --run-id <id> --from-file artefacts/runs/<id>/game.rs \
+        --modules-dir artefacts
 
     python scripts/integrate.py --run-id fail-test --canned-failure
 
@@ -53,18 +58,22 @@ CORE = os.path.dirname(HERE)
 
 CONTRACT = os.path.join(CORE, "src", "combinatorial_game.rs")
 CONTRACT_HASH = os.path.join(HERE, "contract.sha256")
-CURRENT = os.path.join(CORE, "src", "games", "current.rs")
-GAMES_MOD = os.path.join(CORE, "src", "games", "mod.rs")
-SUBMODULE = os.path.join(CORE, "game")
+# The games module is the code-artefacts submodule. `--modules-dir` exists because CI
+# checks the artefacts repo out beside the crate instead of nesting it, which avoids
+# depending on submodule credentials in the workflow.
+GAMES_DIR = os.path.join(CORE, "src", "games")
+SUBMODULE = GAMES_DIR
 
 GAMES_MOD_BODY = """\
-//! Game modules.
+//! BGent game module.
 //!
 //! REWRITTEN BY scripts/integrate.py — do not edit by hand.
 //!
-//! Only the current run's game is compiled. Everything else lives in the
-//! `code-artefacts` repo and is never built, which is why one broken historical
-//! run cannot break this crate.
+//! Only `current` is compiled. `runs/` holds every artefact ever produced and is
+//! never declared here, so one broken historical run cannot break the build and
+//! compile time does not grow with history.
+//!
+//! REWRITTEN BY scripts/integrate.py — do not edit by hand.
 //!
 //! `current.rs` must define, at minimum:
 //!   State, Move and Game (as type aliases, structs or enums)
@@ -215,7 +224,11 @@ def canned_failure_source(run_id: str) -> str:
 
 
 def fetch_from_submodule(ref: str, run_id: str) -> str:
-    """Resolve code-artefacts at `ref` and return the run's game.rs contents."""
+    """Resolve code-artefacts at `ref` and return the run's game.rs contents.
+
+    Only needed when the submodule's working tree is not already on the desired ref;
+    `--from-file` is the normal path.
+    """
     if not os.path.isdir(SUBMODULE):
         die(
             f"code-artefacts submodule is not checked out at {SUBMODULE}.\n"
@@ -240,6 +253,30 @@ def fetch_from_submodule(ref: str, run_id: str) -> str:
             f"{r.stderr.strip()}"
         )
     return r.stdout
+
+
+def resolve_games_dir(explicit: str | None) -> str:
+    """The directory the games module lives in: the code-artefacts submodule."""
+    d = os.path.abspath(explicit) if explicit else GAMES_DIR
+    if not os.path.isdir(d):
+        die(
+            f"games module directory not found: {d}\n"
+            "It is the code-artefacts submodule. Mount it with:\n"
+            f"  git submodule update --init --recursive      (expects {GAMES_DIR})\n"
+            "or point at an existing checkout with --modules-dir."
+        )
+    # A populated module directory is the whole precondition for compiling a game, so
+    # check it is the right repository rather than an empty mount point.
+    marker = os.path.join(d, "mod.rs")
+    if not os.path.isfile(marker):
+        die(
+            f"{d} does not look like the games module (no mod.rs).\n"
+            "That file is committed in code-artefacts and declares `pub mod current;`."
+        )
+    runs = os.path.join(d, "runs")
+    if not os.path.isdir(runs):
+        print(f"    note: no runs/ directory in {d}; installing a game from elsewhere")
+    return d
 
 
 def _function_body(src: str, name: str) -> str | None:
@@ -303,21 +340,23 @@ def static_check(src: str) -> None:
 # --------------------------------------------------------------------------- #
 # 3. install
 # --------------------------------------------------------------------------- #
-def install(src: str, run_id: str) -> None:
-    os.makedirs(os.path.dirname(CURRENT), exist_ok=True)
+def install(src: str, run_id: str, games_dir: str) -> None:
+    current = os.path.join(games_dir, "current.rs")
+    games_mod = os.path.join(games_dir, "mod.rs")
     header = (
         "//! CURRENT GAME — installed by scripts/integrate.py.\n"
         f"//! run: {run_id}\n"
-        "//! source of truth: code-artefacts/runs/" + run_id + "/game.rs\n"
+        "//! from: runs/" + run_id + "/game.rs in code-artefacts\n"
         "//!\n"
         "//! DO NOT EDIT. The next integration overwrites this file.\n\n"
     )
-    with open(CURRENT, "w", encoding="utf-8") as f:
+    with open(current, "w", encoding="utf-8") as f:
         f.write(header + src)
 
-    with open(GAMES_MOD, "w", encoding="utf-8") as f:
+    with open(games_mod, "w", encoding="utf-8") as f:
         f.write(GAMES_MOD_BODY)
-    print(f"    installed src/games/current.rs ({len(src)} bytes)")
+    rel = os.path.relpath(current, CORE)
+    print(f"    installed {rel} ({len(src)} bytes)")
 
 
 # --------------------------------------------------------------------------- #
@@ -393,6 +432,9 @@ def main() -> int:
     ap.add_argument("--run-id", required=True, help="run id, e.g. 20261104T1700Z-tictactoe")
     ap.add_argument("--from-file", help="read the game source from this path")
     ap.add_argument("--artefact-ref", help="ref in code-artefacts (default: run/<run-id>)")
+    ap.add_argument("--modules-dir",
+                    help="the games module directory, i.e. a code-artefacts checkout "
+                         "(default: <core>/src/games)")
     ap.add_argument("--canned-failure", action="store_true",
                     help="install deliberately invalid Rust to test the compile gate")
     ap.add_argument("--no-check", action="store_true", help="build only, skip the harness")
@@ -408,8 +450,9 @@ def main() -> int:
 
     print(f"BGent integrate — run {a.run_id}")
 
-    step(1, "verifying the contract")
+    step(1, "verifying the contract and the games module")
     verify_contract()
+    games_dir = resolve_games_dir(a.modules_dir)
 
     step(2, "reading the run's game source")
     if a.canned_failure:
@@ -427,8 +470,8 @@ def main() -> int:
         print(f"    read runs/{a.run_id}/game.rs at {ref}")
         static_check(src)
 
-    step(3, "installing into the crate")
-    install(src, a.run_id)
+    step(3, "installing into the games module")
+    install(src, a.run_id, games_dir)
 
     if a.no_build:
         print("\nInstalled (build skipped by --no-build).")

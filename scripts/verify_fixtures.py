@@ -7,6 +7,9 @@ matches the one written in that fixture's header. This is the thing to run after
 touching the harness, the CLI, or the module contract: it proves the checks still
 catch what they claim to catch, in both directions.
 
+Fixtures are installed into a scratch copy of the games module, never into the real
+one, so a run of this script cannot leave a deliberately-broken game in the crate.
+
 Usage
 -----
     python scripts/verify_fixtures.py              # all fixtures
@@ -19,8 +22,10 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.path.dirname(HERE)
@@ -40,11 +45,21 @@ def expected_verdict(path: str) -> tuple[str, list[str]]:
     return status, codes
 
 
-def run_fixture(slug: str) -> tuple[int, str]:
+def scratch_module() -> str:
+    """A throwaway games module directory, so fixtures never touch the submodule."""
+    d = tempfile.mkdtemp(prefix="bgent-fixtures-")
+    open(os.path.join(d, "mod.rs"), "w").write("pub mod current;\n")
+    open(os.path.join(d, "current.rs"), "w").write("// empty until a fixture is installed\n")
+    os.makedirs(os.path.join(d, "runs"), exist_ok=True)
+    return d
+
+
+def run_fixture(slug: str, module_dir: str) -> tuple[int, str]:
     src = os.path.join(FIXTURES, f"{slug}.rs")
     r = subprocess.run(
         [sys.executable, os.path.join(HERE, "integrate.py"),
-         "--run-id", f"fx-{slug}", "--from-file", src],
+         "--run-id", f"fx-{slug}", "--from-file", src,
+         "--modules-dir", module_dir],
         cwd=CORE, capture_output=True, text=True,
     )
     return r.returncode, r.stdout + r.stderr
@@ -75,29 +90,33 @@ def main() -> int:
     if not slugs:
         raise SystemExit("no fixtures matched")
 
+    module_dir = scratch_module()
     failures = 0
-    print(f"verifying {len(slugs)} fixture(s)\n")
+    print(f"verifying {len(slugs)} fixture(s) against a scratch games module\n")
 
-    for slug in slugs:
-        want_status, want_codes = expected_verdict(os.path.join(FIXTURES, f"{slug}.rs"))
-        rc, out = run_fixture(slug)
-        got_status, got_codes = observed(out)
+    try:
+        for slug in slugs:
+            want_status, want_codes = expected_verdict(os.path.join(FIXTURES, f"{slug}.rs"))
+            rc, out = run_fixture(slug, module_dir)
+            got_status, got_codes = observed(out)
 
-        missing = [c for c in want_codes if c not in got_codes]
-        want_rc = 1 if want_status == "FAIL" else 0
-        ok = got_status == want_status and not missing and rc == want_rc
+            missing = [c for c in want_codes if c not in got_codes]
+            want_rc = 1 if want_status == "FAIL" else 0
+            ok = got_status == want_status and not missing and rc == want_rc
 
-        mark = "ok  " if ok else "FAIL"
-        print(f"{mark} {slug:26} expected {want_status:4} got {got_status:4}", end="")
-        if missing:
-            print(f"  missing findings: {missing}", end="")
-        print()
+            mark = "ok  " if ok else "FAIL"
+            print(f"{mark} {slug:26} expected {want_status:4} got {got_status:4}", end="")
+            if missing:
+                print(f"  missing findings: {missing}", end="")
+            print()
 
-        if not ok:
-            failures += 1
-            print(f"      expected codes {want_codes}, got {got_codes}, exit {rc}")
-            for line in out.strip().splitlines()[-12:]:
-                print(f"      | {line}")
+            if not ok:
+                failures += 1
+                print(f"      expected codes {want_codes}, got {got_codes}, exit {rc}")
+                for line in out.strip().splitlines()[-14:]:
+                    print(f"      | {line}")
+    finally:
+        shutil.rmtree(module_dir, ignore_errors=True)
 
     print()
     if failures:
