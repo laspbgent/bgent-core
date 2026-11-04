@@ -7,29 +7,34 @@ matches the one written in that fixture's header. This is the thing to run after
 touching the harness, the CLI, or the module contract: it proves the checks still
 catch what they claim to catch, in both directions.
 
-Fixtures are installed into a scratch copy of the games module, never into the real
-one, so a run of this script cannot leave a deliberately-broken game in the crate.
+Fixtures are installed into the real games module (src/games — the code-artefacts
+submodule), because that is the only directory the compiler reads. The baseline game
+is snapshotted first and restored afterwards, including on failure or Ctrl-C, so this
+script never leaves a deliberately-broken game behind.
+
+A consequence worth knowing: `git status` in the submodule will show modified files
+while this runs. That is this script, not a mistake.
 
 Usage
 -----
     python scripts/verify_fixtures.py              # all fixtures
     python scripts/verify_fixtures.py nan_weights  # just one
 
-Requires cargo on PATH. Exits non-zero if any fixture disagrees with its header.
+Requires cargo on PATH and the games submodule mounted. Exits non-zero if any fixture
+disagrees with its header.
 """
 
 from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 CORE = os.path.dirname(HERE)
 FIXTURES = os.path.join(CORE, "fixtures")
+GAMES = os.path.join(CORE, "src", "games")
 
 VERDICT_RE = re.compile(r"^//! Expected harness verdict:\s*(.+)$", re.MULTILINE)
 
@@ -45,21 +50,30 @@ def expected_verdict(path: str) -> tuple[str, list[str]]:
     return status, codes
 
 
-def scratch_module() -> str:
-    """A throwaway games module directory, so fixtures never touch the submodule."""
-    d = tempfile.mkdtemp(prefix="bgent-fixtures-")
-    open(os.path.join(d, "mod.rs"), "w").write("pub mod current;\n")
-    open(os.path.join(d, "current.rs"), "w").write("// empty until a fixture is installed\n")
-    os.makedirs(os.path.join(d, "runs"), exist_ok=True)
-    return d
+def snapshot() -> dict[str, bytes]:
+    """Everything integrate.py writes, so it can be put back exactly."""
+    snap = {}
+    for name in ("current.rs", "mod.rs"):
+        p = os.path.join(GAMES, name)
+        snap[name] = open(p, "rb").read() if os.path.isfile(p) else None
+    return snap
 
 
-def run_fixture(slug: str, module_dir: str) -> tuple[int, str]:
+def restore(snap: dict[str, bytes]) -> None:
+    for name, data in snap.items():
+        p = os.path.join(GAMES, name)
+        if data is None:
+            if os.path.isfile(p):
+                os.remove(p)
+        else:
+            open(p, "wb").write(data)
+
+
+def run_fixture(slug: str) -> tuple[int, str]:
     src = os.path.join(FIXTURES, f"{slug}.rs")
     r = subprocess.run(
         [sys.executable, os.path.join(HERE, "integrate.py"),
-         "--run-id", f"fx-{slug}", "--from-file", src,
-         "--modules-dir", module_dir],
+         "--run-id", f"fx-{slug}", "--from-file", src],
         cwd=CORE, capture_output=True, text=True,
     )
     return r.returncode, r.stdout + r.stderr
@@ -82,6 +96,11 @@ def observed(output: str) -> tuple[str, list[str]]:
 def main() -> int:
     if not os.path.isdir(FIXTURES):
         raise SystemExit(f"no fixtures folder at {FIXTURES}")
+    if not os.path.isfile(os.path.join(GAMES, "mod.rs")):
+        raise SystemExit(
+            f"games module not mounted at {GAMES}.\n"
+            "Run: git submodule update --init --recursive"
+        )
 
     only = sys.argv[1:] or None
     slugs = sorted(
@@ -90,14 +109,14 @@ def main() -> int:
     if not slugs:
         raise SystemExit("no fixtures matched")
 
-    module_dir = scratch_module()
     failures = 0
-    print(f"verifying {len(slugs)} fixture(s) against a scratch games module\n")
+    print(f"verifying {len(slugs)} fixture(s) against the real games module\n")
 
+    snap = snapshot()
     try:
         for slug in slugs:
             want_status, want_codes = expected_verdict(os.path.join(FIXTURES, f"{slug}.rs"))
-            rc, out = run_fixture(slug, module_dir)
+            rc, out = run_fixture(slug)
             got_status, got_codes = observed(out)
 
             missing = [c for c in want_codes if c not in got_codes]
@@ -116,7 +135,8 @@ def main() -> int:
                 for line in out.strip().splitlines()[-14:]:
                     print(f"      | {line}")
     finally:
-        shutil.rmtree(module_dir, ignore_errors=True)
+        restore(snap)
+        print(f"\nbaseline game restored ({sum(1 for v in snap.values() if v is not None)} files)")
 
     print()
     if failures:

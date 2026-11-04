@@ -28,9 +28,9 @@ Usage
 
     python scripts/integrate.py --run-id <run-id> --artefact-ref run/<run-id>
 
-    # when the games module is checked out somewhere other than src/games/
-    python scripts/integrate.py --run-id <id> --from-file artefacts/runs/<id>/game.rs \
-        --modules-dir artefacts
+There is exactly one location the compiler reads — `src/games`, the code-artefacts
+submodule — so there is exactly one place a run can be installed. If you have an
+artefacts checkout elsewhere, mount it at `src/games` rather than pointing here.
 
     python scripts/integrate.py --run-id fail-test --canned-failure
 
@@ -58,9 +58,10 @@ CORE = os.path.dirname(HERE)
 
 CONTRACT = os.path.join(CORE, "src", "combinatorial_game.rs")
 CONTRACT_HASH = os.path.join(HERE, "contract.sha256")
-# The games module is the code-artefacts submodule. `--modules-dir` exists because CI
-# checks the artefacts repo out beside the crate instead of nesting it, which avoids
-# depending on submodule credentials in the workflow.
+# The games module is the code-artefacts submodule, mounted here. This path is not
+# configurable: `pub mod games;` in lib.rs resolves to exactly this directory, so
+# installing a run anywhere else would compile the old game and pass while judging the
+# wrong code.
 GAMES_DIR = os.path.join(CORE, "src", "games")
 SUBMODULE = GAMES_DIR
 
@@ -255,15 +256,15 @@ def fetch_from_submodule(ref: str, run_id: str) -> str:
     return r.stdout
 
 
-def resolve_games_dir(explicit: str | None) -> str:
+def resolve_games_dir() -> str:
     """The directory the games module lives in: the code-artefacts submodule."""
-    d = os.path.abspath(explicit) if explicit else GAMES_DIR
+    d = GAMES_DIR
     if not os.path.isdir(d):
         die(
             f"games module directory not found: {d}\n"
             "It is the code-artefacts submodule. Mount it with:\n"
             f"  git submodule update --init --recursive      (expects {GAMES_DIR})\n"
-            "or point at an existing checkout with --modules-dir."
+            "CI clones code-artefacts straight into core/src/games."
         )
     # A populated module directory is the whole precondition for compiling a game, so
     # check it is the right repository rather than an empty mount point.
@@ -356,6 +357,8 @@ def install(src: str, run_id: str, games_dir: str) -> None:
     with open(games_mod, "w", encoding="utf-8") as f:
         f.write(GAMES_MOD_BODY)
     rel = os.path.relpath(current, CORE)
+    if not rel.replace(os.sep, "/").startswith("src/games/"):
+        die(f"refusing to install outside the games module: {rel}", 2)
     print(f"    installed {rel} ({len(src)} bytes)")
 
 
@@ -432,9 +435,6 @@ def main() -> int:
     ap.add_argument("--run-id", required=True, help="run id, e.g. 20261104T1700Z-tictactoe")
     ap.add_argument("--from-file", help="read the game source from this path")
     ap.add_argument("--artefact-ref", help="ref in code-artefacts (default: run/<run-id>)")
-    ap.add_argument("--modules-dir",
-                    help="the games module directory, i.e. a code-artefacts checkout "
-                         "(default: <core>/src/games)")
     ap.add_argument("--canned-failure", action="store_true",
                     help="install deliberately invalid Rust to test the compile gate")
     ap.add_argument("--no-check", action="store_true", help="build only, skip the harness")
@@ -452,7 +452,7 @@ def main() -> int:
 
     step(1, "verifying the contract and the games module")
     verify_contract()
-    games_dir = resolve_games_dir(a.modules_dir)
+    games_dir = resolve_games_dir()
 
     step(2, "reading the run's game source")
     if a.canned_failure:
