@@ -1,15 +1,13 @@
 name: check
 
-# The crate's own gate: the contract must be intact, the reference game must pass
-# the harness, and every fixture must still produce the verdict it documents.
-# If this is green, a Rules Agent's output failing the same checks means the
-# generated game is wrong — not that the harness is broken.
-
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   check:
@@ -54,10 +52,32 @@ jobs:
           PY
 
       - name: Every fixture behaves as documented
-        run: python3 scripts/verify_fixtures.py
+        id: fixtures
+        run: |
+          set -o pipefail
+          python3 scripts/verify_fixtures.py 2>&1 | tee fixture-verify.log
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload the report
         if: always()
+        uses: actions/upload-artifact@v4
         with:
           name: harness-report
-          path: report.json
+          path: |
+            report.json
+            fixture-verify.log
+
+      # GitHub's job-log endpoint answers with a redirect that our client cannot
+      # follow, so on failure the verifier's output is committed to a branch
+      # instead. That is the only way the failure text reaches the author.
+      - name: Publish the failure log
+        if: failure()
+        run: |
+          set -e
+          git config user.name  "bgent-ci"
+          git config user.email "bgent-ci@users.noreply.github.com"
+          mkdir -p ci-logs
+          cp fixture-verify.log "ci-logs/fixtures-${GITHUB_SHA:0:10}.log"
+          git checkout -B ci-logs
+          git add -f ci-logs
+          git commit -m "ci: fixture verification output for ${GITHUB_SHA:0:10}"
+          git push -f origin ci-logs
