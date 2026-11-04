@@ -74,7 +74,9 @@ jobs:
         run: cargo test --locked
 
       - name: Clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: |
+          set -o pipefail
+          cargo clippy --all-targets -- -D warnings 2>&1 | tee clippy.log
 
       - name: Reference game passes the harness
         run: |
@@ -100,6 +102,7 @@ jobs:
           name: harness-report
           path: |
             report.json
+            clippy.log
             fixture-verify.log
             build-error.log
 
@@ -112,8 +115,12 @@ jobs:
           git config user.name  "bgent-ci"
           git config user.email "bgent-ci@users.noreply.github.com"
           mkdir -p ci-logs
-          cp fixture-verify.log "ci-logs/fixtures-${GITHUB_SHA:0:10}.log" 2>/dev/null || true
-          cp build-error.log    "ci-logs/build-${GITHUB_SHA:0:10}.log"    2>/dev/null || true
+          for f in clippy.log fixture-verify.log build-error.log; do
+            if [ -f "$f" ]; then
+              cp "$f" "ci-logs/${f%.log}-${GITHUB_SHA:0:10}.log"
+              echo "publishing $f"
+            fi
+          done
           git checkout -B ci-logs
           git add -f ci-logs
           git commit -m "ci: verification output for ${GITHUB_SHA:0:10}" || true
