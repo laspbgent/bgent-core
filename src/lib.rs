@@ -13,6 +13,16 @@
 //! `harness` is a player-free test surface: it explores the state graph, checks the
 //! contract's invariants, and plays seeded random/greedy games.
 
+// The contract is an immutable, externally-authored file: it is not ours to tidy. It
+// carries a stray blank line inside a doc comment, an unused exploration type that the
+// harness deliberately does not use, and a needless `return`. Silencing those here keeps
+// the byte-for-byte guarantee intact while still letting `-D warnings` mean something
+// for every file we do own.
+#[allow(
+    dead_code,
+    clippy::empty_line_after_doc_comments,
+    clippy::needless_return
+)]
 pub mod combinatorial_game;
 pub mod games;
 pub mod harness;
