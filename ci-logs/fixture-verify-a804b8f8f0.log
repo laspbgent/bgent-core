@@ -1,0 +1,132 @@
+verifying 8 fixture(s) against a scratch games module
+
+FAIL bad_legality_len           expected FAIL got PASS  missing findings: ['legality_length', 'no_terminal_reachable']
+      expected codes ['legality_length', 'no_terminal_reachable'], got ['repeated_descriptions'], exit 0
+      | [3] installing into the games module
+      |     installed ../../../../../tmp/bgent-fixtures-crqlhi_o/current.rs (2006 bytes)
+      | 
+      | [4] building
+      |     $ cargo build --quiet
+      |     build ok, no warnings
+      | 
+      | [5] running the player-free harness
+      |     $ cargo run --quiet -- check --json --seed 749079 --out /home/runner/work/bgent-core/bgent-core/runs/fx-bad_legality_len/report.json
+      |     harness: 3870 states, 268 terminal, 0 error(s), 0 warning(s)
+      |       INFO  [repeated_descriptions] 18 distinct descriptions were each reused more than 3 times (e.g. "Place O at row 3, column 3" x172). Repeated text is fine for repeated moves, but it makes the trace harder to read.
+      |     report written to runs/fx-bad_legality_len/report.json
+      | 
+      | PASS — game builds and the harness found no errors.
+FAIL illegal_move_advances      expected FAIL got PASS  missing findings: ['illegal_move_advances', 'no_terminal_reachable']
+      expected codes ['illegal_move_advances', 'no_terminal_reachable'], got ['repeated_descriptions'], exit 0
+      | [3] installing into the games module
+      |     installed ../../../../../tmp/bgent-fixtures-crqlhi_o/current.rs (1756 bytes)
+      | 
+      | [4] building
+      |     $ cargo build --quiet
+      |     build ok, no warnings
+      | 
+      | [5] running the player-free harness
+      |     $ cargo run --quiet -- check --json --seed 749079 --out /home/runner/work/bgent-core/bgent-core/runs/fx-illegal_move_advances/report.json
+      |     harness: 3870 states, 268 terminal, 0 error(s), 0 warning(s)
+      |       INFO  [repeated_descriptions] 18 distinct descriptions were each reused more than 3 times (e.g. "Place X at row 1, column 3" x57). Repeated text is fine for repeated moves, but it makes the trace harder to read.
+      |     report written to runs/fx-illegal_move_advances/report.json
+      | 
+      | PASS — game builds and the harness found no errors.
+FAIL nan_weights                expected FAIL got PASS  missing findings: ['legality_nan', 'no_terminal_reachable']
+      expected codes ['legality_nan', 'no_terminal_reachable'], got ['repeated_descriptions'], exit 0
+      | [3] installing into the games module
+      |     installed ../../../../../tmp/bgent-fixtures-crqlhi_o/current.rs (1876 bytes)
+      | 
+      | [4] building
+      |     $ cargo build --quiet
+      |     build ok, no warnings
+      | 
+      | [5] running the player-free harness
+      |     $ cargo run --quiet -- check --json --seed 749079 --out /home/runner/work/bgent-core/bgent-core/runs/fx-nan_weights/report.json
+      |     harness: 3870 states, 268 terminal, 0 error(s), 0 warning(s)
+      |       INFO  [repeated_descriptions] 18 distinct descriptions were each reused more than 3 times (e.g. "Place O at row 3, column 2" x172). Repeated text is fine for repeated moves, but it makes the trace harder to read.
+      |     report written to runs/fx-nan_weights/report.json
+      | 
+      | PASS — game builds and the harness found no errors.
+FAIL never_terminates           expected WARN got PASS  missing findings: ['no_terminal_reachable']
+      expected codes ['no_terminal_reachable'], got ['repeated_descriptions'], exit 0
+      | [3] installing into the games module
+      |     installed ../../../../../tmp/bgent-fixtures-crqlhi_o/current.rs (1447 bytes)
+      | 
+      | [4] building
+      |     $ cargo build --quiet
+      |     build ok, no warnings
+      | 
+      | [5] running the player-free harness
+      |     $ cargo run --quiet -- check --json --seed 749079 --out /home/runner/work/bgent-core/bgent-core/runs/fx-never_terminates/report.json
+      |     harness: 3870 states, 268 terminal, 0 error(s), 0 warning(s)
+      |       INFO  [repeated_descriptions] 18 distinct descriptions were each reused more than 3 times (e.g. "Place X at row 3, column 2" x57). Repeated text is fine for repeated moves, but it makes the trace harder to read.
+      |     report written to runs/fx-never_terminates/report.json
+      | 
+      | PASS — game builds and the harness found no errors.
+FAIL no_moves                   expected FAIL got PASS  missing findings: ['no_moves', 'no_successors']
+      expected codes ['no_moves', 'no_successors'], got ['repeated_descriptions'], exit 0
+      | [3] installing into the games module
+      |     installed ../../../../../tmp/bgent-fixtures-crqlhi_o/current.rs (1272 bytes)
+      | 
+      | [4] building
+      |     $ cargo build --quiet
+      |     build ok, no warnings
+      | 
+      | [5] running the player-free harness
+      |     $ cargo run --quiet -- check --json --seed 749079 --out /home/runner/work/bgent-core/bgent-core/runs/fx-no_moves/report.json
+      |     harness: 3870 states, 268 terminal, 0 error(s), 0 warning(s)
+      |       INFO  [repeated_descriptions] 18 distinct descriptions were each reused more than 3 times (e.g. "Place X at row 2, column 3" x57). Repeated text is fine for repeated moves, but it makes the trace harder to read.
+      |     report written to runs/fx-no_moves/report.json
+      | 
+      | PASS — game builds and the harness found no errors.
+FAIL nondeterministic           expected FAIL got PASS  missing findings: ['nondeterministic_try_move']
+      expected codes ['nondeterministic_try_move'], got ['repeated_descriptions'], exit 0
+      | [3] installing into the games module
+      |     installed ../../../../../tmp/bgent-fixtures-crqlhi_o/current.rs (1907 bytes)
+      | 
+      | [4] building
+      |     $ cargo build --quiet
+      |     build ok, no warnings
+      | 
+      | [5] running the player-free harness
+      |     $ cargo run --quiet -- check --json --seed 749079 --out /home/runner/work/bgent-core/bgent-core/runs/fx-nondeterministic/report.json
+      |     harness: 3870 states, 268 terminal, 0 error(s), 0 warning(s)
+      |       INFO  [repeated_descriptions] 18 distinct descriptions were each reused more than 3 times (e.g. "Place X at row 2, column 3" x57). Repeated text is fine for repeated moves, but it makes the trace harder to read.
+      |     report written to runs/fx-nondeterministic/report.json
+      | 
+      | PASS — game builds and the harness found no errors.
+FAIL terminal_init              expected FAIL got PASS  missing findings: ['terminal_init', 'no_successors']
+      expected codes ['terminal_init', 'no_successors'], got ['repeated_descriptions'], exit 0
+      | [3] installing into the games module
+      |     installed ../../../../../tmp/bgent-fixtures-crqlhi_o/current.rs (1367 bytes)
+      | 
+      | [4] building
+      |     $ cargo build --quiet
+      |     build ok, no warnings
+      | 
+      | [5] running the player-free harness
+      |     $ cargo run --quiet -- check --json --seed 749079 --out /home/runner/work/bgent-core/bgent-core/runs/fx-terminal_init/report.json
+      |     harness: 3870 states, 268 terminal, 0 error(s), 0 warning(s)
+      |       INFO  [repeated_descriptions] 18 distinct descriptions were each reused more than 3 times (e.g. "Place X at row 3, column 2" x57). Repeated text is fine for repeated moves, but it makes the trace harder to read.
+      |     report written to runs/fx-terminal_init/report.json
+      | 
+      | PASS — game builds and the harness found no errors.
+FAIL wrong_eval_len             expected FAIL got PASS  missing findings: ['eval_len']
+      expected codes ['eval_len'], got ['repeated_descriptions'], exit 0
+      | [3] installing into the games module
+      |     installed ../../../../../tmp/bgent-fixtures-crqlhi_o/current.rs (1641 bytes)
+      | 
+      | [4] building
+      |     $ cargo build --quiet
+      |     build ok, no warnings
+      | 
+      | [5] running the player-free harness
+      |     $ cargo run --quiet -- check --json --seed 749079 --out /home/runner/work/bgent-core/bgent-core/runs/fx-wrong_eval_len/report.json
+      |     harness: 3870 states, 268 terminal, 0 error(s), 0 warning(s)
+      |       INFO  [repeated_descriptions] 18 distinct descriptions were each reused more than 3 times (e.g. "Place X at row 1, column 2" x57). Repeated text is fine for repeated moves, but it makes the trace harder to read.
+      |     report written to runs/fx-wrong_eval_len/report.json
+      | 
+      | PASS — game builds and the harness found no errors.
+
+8 fixture(s) disagreed with their header
